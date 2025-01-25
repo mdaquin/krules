@@ -131,16 +131,21 @@ def BackwardChaining(kb: KB, G):
     return kb.valueOf(G[0].variable) != G[0].negation
   for g in G:
     SR = kb.compatibleRules(g)
+    NG = G.copy()
+    NG.remove(g)
     if len(SR) == 0: return False
+    found = False
     for rule in SR:
-      NG = G.copy()
-      NG.remove(g)
+      NNG = NG.copy()
       adG = rule.openPremise(kb)
       print(f"({rule}) adds goals: ", end="")
       for a in adG: print(a, end=" ")
       print()
-      NG.extend(rule.openPremise(kb))
-      if not BackwardChaining(kb, NG): return False
+      NNG.extend(adG)
+      if BackwardChaining(kb, NNG): 
+        found=True
+        break
+    if not found: return False
   return True
 
 # dirty implementation... we should be able to do better than that...
