@@ -102,8 +102,7 @@ class KB:
     new.rules = self.rules.copy()
     new.facts = self.facts.copy()
     return new
-
-
+    
 def ForwardChaining(kb: KB, Qu: str):
   # kb should include facts, Q is the name of the variable
   # of which we want to know the value
@@ -120,6 +119,7 @@ def ForwardChaining(kb: KB, Qu: str):
       new = S.copy()
       print(f"Applying {rule}")
       new.facts.append(rule.conclusion)
+      if rule.conclusion.variable == Qu: return new.valueOf(Qu)
       Q.append(new)
   return False
 
