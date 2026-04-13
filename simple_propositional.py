@@ -85,11 +85,15 @@ class KB:
     compatible = []
     for rule in self.rules:
       if goal == rule.conclusion:
+        inc = False
         for premise in rule.premise:
           for fact in self.facts:
             if fact.variable == premise.variable:
-              if fact.negation != premise.negation: break
-        compatible.append(rule)
+              if fact.negation != premise.negation: 
+                inc = True
+                break
+          if inc: break
+        if not inc: compatible.append(rule)
     return compatible
 
   def valueOf(self, var: str) -> bool:
@@ -115,7 +119,7 @@ def ForwardChaining(kb: KB, Qu: str):
       print("Found an inconsistent state")
       print(SR)
       return None
-    for rule in S.applicableRules():
+    for rule in SR:
       new = S.copy()
       print(f"Applying {rule}")
       new.facts.append(rule.conclusion)
@@ -127,71 +131,60 @@ def BackwardChaining(kb: KB, G):
   # if G is a string, transform it into a list of Literals (goals)
   if type(G) == str: G = [Literal(G)]
   if len(G) == 0: return True
-  if len(G) == 1 and kb.valueOf(G[0].variable) is not None:
-    return kb.valueOf(G[0].variable) != G[0].negation
-  for g in G:
-    SR = kb.compatibleRules(g)
-    NG = G.copy()
-    NG.remove(g)
-    if len(SR) == 0: return False
-    found = False
-    for rule in SR:
-      NNG = NG.copy()
-      adG = rule.openPremise(kb)
-      print(f"({rule}) adds goals: ", end="")
-      for a in adG: print(a, end=" ")
-      print()
-      NNG.extend(adG)
-      if BackwardChaining(kb, NNG): 
-        found=True
-        break
-    if not found: return False
-  return True
+  g = G[0]
+  NG = G[1:]
+  if kb.valueOf(g.variable) is not None:
+    if kb.valueOf(g.variable) != g.negation: return False
+    return BackwardChaining(kb, NG)
+  SR = kb.compatibleRules(g)
+  if len(SR) == 0: return False
+  for rule in SR:
+    NNG = NG.copy()
+    adG = rule.openPremise(kb)
+    print(f"({rule}) adds goals: ", end="")
+    for a in adG: print(a, end=" ")
+    print()
+    NNG.extend(adG)
+    if BackwardChaining(kb, NNG): return True
+  return False
 
-# dirty implementation... we should be able to do better than that...
 def InteractiveBackwardChaining(kb: KB, G):
   # if G is a string, transform it into a list of Literals (goals)
   if type(G) == str: G = [Literal(G)]
   if len(G) == 0: return True
-  if len(G) == 1 and kb.valueOf(G[0].variable) is not None:
-    return kb.valueOf(G[0].variable) != G[0].negation
-  for g in G:
-    SR = kb.compatibleRules(g)
-    if len(SR) == 0:
-      if kb.valueOf(g.variable) is not None:
-        if kb.valueOf(g.variable): ui="Y"
-        else: ui="N"
-      else: ui = input(f"Type 'Y' if {g.variable} is true: ")
-      if ui == "Y" and g.negation:
-        kb.add_fact(g.variable)
-        return False
-      elif ui != "Y" and not g.negation:
-        kb.add_fact("!"+g.variable)
-        return False
-      NG = G.copy()
-      NG.remove(g)
+  g = G[0]
+  NG = G[1:]
+  if kb.valueOf(g.variable) is not None:
+    if kb.valueOf(g.variable) != g.negation: return False
+    return InteractiveBackwardChaining(kb, NG)
+  SR = kb.compatibleRules(g)
+  if len(SR) == 0:
+    ui = input(f"Type 'Y' if {g.variable} is true: ")
+    if ui == "Y" and g.negation:
+      kb.add_fact(g.variable)
+      return False
+    elif ui != "Y" and not g.negation:
+      kb.add_fact("!"+g.variable)
+      return False
+    kb.add_fact(g)
+    return InteractiveBackwardChaining(kb, NG)
+  for rule in SR:
+    NNG = NG.copy()
+    adG = rule.openPremise(kb)
+    print(f"({rule}) adds goals: ", end="")
+    for a in adG: print(a, end=" ")
+    print()
+    NNG.extend(adG)
+    if InteractiveBackwardChaining(kb, NNG):
       kb.add_fact(g)
-      return InteractiveBackwardChaining(kb, NG)
-    for rule in SR:
-      NG = G.copy()
-      NG.remove(g)
-      adG = rule.openPremise(kb)
-      print(f"({rule}) adds goals: ", end="")
-      for a in adG: print(a, end=" ")
-      print()
-      NG.extend(adG)
-      if not InteractiveBackwardChaining(kb, NG):
-        if kb.valueOf(g.variable) is not None:
-          if kb.valueOf(g.variable): ui="Y"
-          else: ui="N"
-        else: ui = input(f"Type 'Y' if {g.variable} is true: ")
-        if ui == "Y" and g.negation:
-          kb.add_fact(g.variable)
-          return False
-        elif ui != "Y" and not g.negation:
-          kb.add_fact("!"+g.variable)
-          return False
-        kb.add_fact(g)
-      else: kb.add_fact(g)
-  return True
+      return True
+  ui = input(f"Type 'Y' if {g.variable} is true: ")
+  if ui == "Y" and g.negation:
+    kb.add_fact(g.variable)
+    return False
+  elif ui != "Y" and not g.negation:
+    kb.add_fact("!"+g.variable)
+    return False
+  kb.add_fact(g)
+  return InteractiveBackwardChaining(kb, NG)
 
