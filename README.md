@@ -18,7 +18,6 @@ The first-order version additionally supports loading a KB from a file in a simp
 ## Limitations
 
 - No Negation as Failure (NAF): negated premises only hold if the negated fact is explicitly asserted
-- No occurs check in unification (first-order version)
 - No cycle detection: recursive rules may cause infinite loops
 
 ## Propositional example
