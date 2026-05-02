@@ -1,0 +1,25 @@
+# Basic rules for building indirect relations by forward chaining
+# ? is any relation 
+
+# shortcuts
+sco::http://www.w3.org/2000/01/rdf-schema#subClassOf
+spo::http://www.w3.org/2000/01/rdf-schema#subPropertyOf
+type::http://www.w3.org/1999/02/22-rdf-syntax-ns#type 
+ec::http://www.w3.org/2002/07/owl#equivalentClass
+ep::http://www.w3.org/2002/07/owl#equivalentProperty
+sa::http://www.w3.org/2002/07/owl#sameAs
+
+# basic transitivity of sco and sco
+a sco c :- a sco b, b sco c
+a spo c :- a spo b, b spo c
+a type c :- a type b, b sco c
+
+# dealing with equivalences 
+b ec a :- a ec b
+a sco b :- a ec b
+b sco a :- a ec b
+b ep a :- a ep b
+a spo b :- a ep b
+b sco a :- a ep b
+a sa b :- b sa a
+a type c :- a sa b, b type c

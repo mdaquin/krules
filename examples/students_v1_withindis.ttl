@@ -1,0 +1,169 @@
+@prefix : <http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@base <http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1/> .
+
+<http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1> rdf:type owl:Ontology .
+
+#################################################################
+#    Object Properties
+#################################################################
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#registeredIn
+:registeredIn rdf:type owl:ObjectProperty .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#takesPlaceIn
+:takesPlaceIn rdf:type owl:ObjectProperty .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#teaches
+:teaches rdf:type owl:ObjectProperty .
+
+
+#################################################################
+#    Classes
+#################################################################
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#Activity
+:Activity rdf:type owl:Class .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#Animal
+:Animal rdf:type owl:Class .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#Course
+:Course rdf:type owl:Class ;
+        rdfs:subClassOf :EcudationalActivity .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#Dog
+:Dog rdf:type owl:Class ;
+     rdfs:subClassOf :Mammal .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#EcudationalActivity
+:EcudationalActivity rdf:type owl:Class ;
+                     rdfs:subClassOf :Activity .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#EducationalInstitution
+:EducationalInstitution rdf:type owl:Class .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#GradSchool
+:GradSchool rdf:type owl:Class ;
+            rdfs:subClassOf :HigherEducationInstitution .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#HigherEducationInstitution
+:HigherEducationInstitution rdf:type owl:Class ;
+                            rdfs:subClassOf :EducationalInstitution .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#Lecturer
+:Lecturer rdf:type owl:Class ;
+          owl:equivalentClass [ owl:intersectionOf ( :Person
+                                                     [ rdf:type owl:Restriction ;
+                                                       owl:onProperty :teaches ;
+                                                       owl:someValuesFrom [ owl:intersectionOf ( :Course
+                                                                                                 [ rdf:type owl:Restriction ;
+                                                                                                   owl:onProperty :takesPlaceIn ;
+                                                                                                   owl:someValuesFrom :HigherEducationInstitution
+                                                                                                 ]
+                                                                                               ) ;
+                                                                            rdf:type owl:Class
+                                                                          ]
+                                                     ]
+                                                   ) ;
+                                rdf:type owl:Class
+                              ] ;
+          rdfs:subClassOf :Person ;
+          owl:disjointWith :Student ;
+          rdfs:label "Lecturer"@en .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#Mammal
+:Mammal rdf:type owl:Class ;
+        rdfs:subClassOf :Vertebrate .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#Person
+:Person rdf:type owl:Class ;
+        rdfs:subClassOf :Mammal .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#PhDStudent
+:PhDStudent rdf:type owl:Class ;
+            owl:equivalentClass [ owl:intersectionOf ( :Person
+                                                       [ rdf:type owl:Restriction ;
+                                                         owl:onProperty :registeredIn ;
+                                                         owl:someValuesFrom :GradSchool
+                                                       ]
+                                                     ) ;
+                                  rdf:type owl:Class
+                                ] ;
+            rdfs:subClassOf :Person .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#Student
+:Student rdf:type owl:Class ;
+         owl:equivalentClass [ owl:intersectionOf ( :Person
+                                                    [ rdf:type owl:Restriction ;
+                                                      owl:onProperty :registeredIn ;
+                                                      owl:someValuesFrom :HigherEducationInstitution
+                                                    ]
+                                                  ) ;
+                               rdf:type owl:Class
+                             ] ;
+         rdfs:subClassOf :Person .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#University
+:University rdf:type owl:Class ;
+            rdfs:subClassOf :HigherEducationInstitution .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#Vertebrate
+:Vertebrate rdf:type owl:Class ;
+            rdfs:subClassOf :Animal .
+
+
+#################################################################
+#    Individuals
+#################################################################
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#IAEM
+:IAEM rdf:type owl:NamedIndividual ,
+               :GradSchool .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#UL
+:UL rdf:type owl:NamedIndividual ,
+             :University .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#jules
+:jules rdf:type owl:NamedIndividual ,
+                :Person ;
+       :registeredIn :IAEM ;
+       :teaches :symbolicAI .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#mathieu
+:mathieu rdf:type owl:NamedIndividual ,
+                  :Person ;
+         :teaches :symbolicAI .
+
+
+###  http://www.semanticweb.org/mdaquin/ontologies/2026/2/students_v1#symbolicAI
+:symbolicAI rdf:type owl:NamedIndividual ,
+                     :Course ;
+            :takesPlaceIn :UL .
+
+
+###  Generated by the OWL API (version 4.5.29.2024-05-13T12:11:03Z) https://github.com/owlcs/owlapi

@@ -1,8 +1,8 @@
 # krules
 
-A simple rule engine for learning purposes, available in two flavours:
+A set of simple rule engines for learning purposes and use in python:
 
-- **`simple_propositional.py`** — propositional rules (atoms with no arguments)
+- **`simple_propositional.py`** — propositional rules, i.e. rules that have propositional variables (true/false) as premises and conclusions.
 - **`first_order.py`** — first-order rules with predicate arguments and unification (variables start with an uppercase letter, facts must be ground)
 
 Both provide the same three inference algorithms:
