@@ -150,11 +150,11 @@ class KRuleBase:
             pathindex[path].extend(entities)
             for entity in entities:
                 if entity[0] not in e1index: e1index[entity[0]] = {}
-                if path not in e1index[entity[0]]: e1index[entity[0]][path] = []
-                if entity[1] not in e1index[entity[0]][path]: e1index[entity[0]][path].append(entity[1])
+                if path not in e1index[entity[0]]: e1index[entity[0]][path] = set()
+                if entity[1] not in e1index[entity[0]][path]: e1index[entity[0]][path].add(entity[1])
                 if entity[1] not in e2index: e2index[entity[1]] = {}
-                if path not in e2index[entity[1]]: e2index[entity[1]][path] = []
-                if entity[0] not in e2index[entity[1]][path]: e2index[entity[1]][path].append(entity[0])
+                if path not in e2index[entity[1]]: e2index[entity[1]][path] = set()
+                if entity[0] not in e2index[entity[1]][path]: e2index[entity[1]][path].add(entity[0])
         for path, entities in npaths.items():
             if path in self.rulepaths:
                 for entpair in entities:
