@@ -15,15 +15,15 @@ class RuleParsingError(Exception): pass
 
 class Rule():
     def __init__(self, premise, conclusion):
-        """ 
+        """
         premise is a list of relation indices
         conclusion is a tuple of (relation index, index of entity 1 in premise, index of entity 2 in premise)
         """
-        self.premise = premise 
-        self.conclusion = conclusion 
+        self.premise = premise
+        self.conclusion = conclusion
         self.subpaths = self._premise_subpaths()
-        self.strpremise = self._rels_to_str(premise)
-        self.strsubpaths = [self._rels_to_str(subpath) for subpath in self.subpaths]
+        self.keypremise = tuple(premise)
+        self.keysubpaths = [tuple(subpath) for subpath in self.subpaths]
     def __str__(self):
         return str(self.conclusion)+" :- "+str(self.premise)
     def _premise_subpaths(self):
@@ -33,11 +33,7 @@ class Rule():
             for j in range(len(rels)-i+1):
                 subrels = rels[j:j+i]
                 if subrels not in subpaths: subpaths.append(subrels)
-        return subpaths    
-    def _rels_to_str(self, rels):
-        relsstr = ""
-        for r in rels: relsstr += "_"+str(r)
-        return relsstr
+        return subpaths
 
 class KRuleBase:
     def __init__(self, rules_file):
@@ -94,10 +90,10 @@ class KRuleBase:
         else: raise RuleParsingError("Unknown relation in conclusion of rule: "+conclusion_relation+" in line: "+line)
         rule = Rule(premise_relations, (conclusion_relation, index1, index2))
         self.rules.append(rule)
-        for subpath in rule.strsubpaths:
+        for subpath in rule.keysubpaths:
             if subpath not in self.usefulpaths: self.usefulpaths.append(subpath)
-        if rule.strpremise not in self.rulepaths: self.rulepaths[rule.strpremise] = []
-        self.rulepaths[rule.strpremise].append(rule)
+        if rule.keypremise not in self.rulepaths: self.rulepaths[rule.keypremise] = []
+        self.rulepaths[rule.keypremise].append(rule)
 
     def process(self, relations):
         pathindex = {}
@@ -112,39 +108,36 @@ class KRuleBase:
         if count >= 1000: print()
         result = {}
         for path in pathindex:
-            rel = path[1:]
-            if "_" in rel: continue # only return direct relations
-            rel = int(rel)
+            if len(path) > 1: continue  # only return direct relations
+            rel = path[0]
             if rel not in result: result[rel] = []
             for entities in pathindex[path]:
                 result[rel].append(entities)
         return result
 
-    # path as a string : 
-    #    - 1 index path -> (e1, e2)
-    #    - 1 index e1 -> (path->e2)
-    #    - 1 index e2 -> (path->e1)
+    # path as a tuple of relation indices:
+    #    - pathindex: path -> [(e1, e2)]
+    #    - e1index:   e1 -> {path -> {e2}}
+    #    - e2index:   e2 -> {path -> {e1}}
     # TODO: deal with possible cycles... if needed
     def _add_to_relpaths(self, rel, entpair, pathindex, e1index, e2index):
-        npaths = {"_"+str(rel): [entpair]} # initialise npaths with the new relation
-        for usefulpath in self.usefulpaths: 
-           # BUG: will fail if more than 10 rels ("_1" in "_10")
-           if "_"+str(rel) in usefulpath: # TODO: store strrel 
-               # get all indexes of "_"+str(rel) in usefulpath, and for each one, split the path and get the origins and destinations
-               rel_indexes = [i for i in range(len(usefulpath)) if usefulpath.startswith("_"+str(rel), i)]
-               for rel_index in rel_indexes:
+        npaths = {(rel,): [entpair]}
+        for usefulpath in self.usefulpaths:
+            if rel in usefulpath:
+                rel_indexes = [i for i in range(len(usefulpath)) if usefulpath[i] == rel]
+                for rel_index in rel_indexes:
                     prevpath = usefulpath[:rel_index]
-                    nextpath = usefulpath[rel_index+len("_"+str(rel)):]
-                    if prevpath is None or prevpath == "": origins = [entpair[0]]
+                    nextpath = usefulpath[rel_index+1:]
+                    if prevpath == (): origins = [entpair[0]]
                     elif entpair[0] not in e2index or prevpath not in e2index[entpair[0]]: continue
                     else: origins = e2index[entpair[0]][prevpath]
-                    if nextpath is None or nextpath == "": destinations = [entpair[1]]
+                    if nextpath == (): destinations = [entpair[1]]
                     elif entpair[1] not in e1index or nextpath not in e1index[entpair[1]]: continue
                     else: destinations = e1index[entpair[1]][nextpath]
                     for origin in origins:
                         for destination in destinations:
                             if usefulpath not in npaths: npaths[usefulpath] = []
-                            if (origin, destination) not in npaths[usefulpath]: npaths[usefulpath].append((origin, destination))  
+                            if (origin, destination) not in npaths[usefulpath]: npaths[usefulpath].append((origin, destination))
         for path, entities in npaths.items():
             if path not in pathindex: pathindex[path] = []
             pathindex[path].extend(entities)
@@ -164,7 +157,7 @@ class KRuleBase:
                             self._add_to_relpaths(rule.conclusion[0], nentpair, pathindex, e1index, e2index)
 
     def known(self, rel, entpair, e1index):
-        return entpair[0] in e1index and "_"+str(rel) in e1index[entpair[0]] and entpair[1] in e1index[entpair[0]]["_"+str(rel)]
+        return entpair[0] in e1index and (rel,) in e1index[entpair[0]] and entpair[1] in e1index[entpair[0]][(rel,)]
 
 def rdf_to_relations(rdf_file, oshortcuts):
     import rdflib
