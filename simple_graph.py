@@ -7,36 +7,50 @@ shortcut_name :: relation_name
 # This is a rule
 entity1 rel3 entity :- entity1 rel1 entity2, entity2 rel2 entity3
 
-The constraints on rules are that:
-- The premise must be a path of relations between entities.
-- The conclusion must be a relation betwween the two entities at the beginning and end of the path of the premise.
-- The premise's path cannot be longer than 6 relations (to keep things manageable).
+The constraints on rules are that the premise must be a path of relations between entities. The conclusion must 
+be a relation betwween the two entities at the beginning and end of the path of the premise.
 '''
-import json 
-import numpy as np
 
 class RuleParsingError(Exception): pass
 
 class Rule():
     def __init__(self, premise, conclusion):
+        """ 
+        premise is a list of relation indices
+        conclusion is a tuple of (relation index, index of entity 1 in premise, index of entity 2 in premise)
+        """
         self.premise = premise 
-        while len(self.premise) < 6: self.premise.append(-1)
         self.conclusion = conclusion 
+        self.subpaths = self._premise_subpaths()
+        self.strpremise = self._rels_to_str(premise)
+        self.strsubpaths = [self._rels_to_str(subpath) for subpath in self.subpaths]
     def __str__(self):
         return str(self.conclusion)+" :- "+str(self.premise)
+    def _premise_subpaths(self):
+        subpaths = []
+        rels = self.premise
+        for i in range(1, len(rels)+1):
+            for j in range(len(rels)-i+1):
+                subrels = rels[j:j+i]
+                if subrels not in subpaths: subpaths.append(subrels)
+        return subpaths    
+    def _rels_to_str(self, rels):
+        relsstr = ""
+        for r in rels: relsstr += "_"+str(r)
+        return relsstr
 
 class KRuleBase:
     def __init__(self, rules_file):
         self.shortcuts = {}
         self.rules = []
+        self.usefulpaths = []
+        self.rulepaths = {}
         with open(rules_file, 'r') as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'): # comments
                     if self.isShortcutDefinition(line): self.addShortcutDefinition(line)
                     else: self.addRule(line)
-        print("Loaded", len(self.shortcuts), "shortcuts and", len(self.rules), "rules.")
-
     def isShortcutDefinition(self, line): return "::" in line
     
     def addShortcutDefinition(self, line):
@@ -63,7 +77,6 @@ class KRuleBase:
             if len(premise_entities) != 1 and premise_entities[-1][0] != premise_entities[-2][1]:
                 raise RuleParsingError("Entities in premise of rule do not form a path: "+line)
             if comp[1] in self.shortcuts: premise_relations.append(list(self.shortcuts.keys()).index(comp[1])) 
-            elif comp[1] == "?": premise_relations.append(-1) # wildcard for any custom relation, which is "related"
             else: raise RuleParsingError("Unknown relation in premise of rule: "+comp[1]+" in line: "+line)
         conclusion_parts = conclusion_part.split(" ")
         index1 = -1
@@ -74,8 +87,6 @@ class KRuleBase:
         if premise_entities[-1][1] == conclusion_parts[2]: index2 = len(premise_entities)
         if premise_entities[-1][1] == conclusion_parts[0]: index1 = len(premise_entities)
         if index1 == -1 or index2 == -1:
-            print(premise_entities)
-            print(conclusion_parts)
             raise RuleParsingError("Entities in conclusion not found in premise: "+line)
         conclusion_relation = conclusion_parts[1]
         if conclusion_relation in self.shortcuts: 
@@ -83,105 +94,129 @@ class KRuleBase:
         else: raise RuleParsingError("Unknown relation in conclusion of rule: "+conclusion_relation+" in line: "+line)
         rule = Rule(premise_relations, (conclusion_relation, index1, index2))
         self.rules.append(rule)
-    
+        for subpath in rule.strsubpaths:
+            if subpath not in self.usefulpaths: self.usefulpaths.append(subpath)
+        if rule.strpremise not in self.rulepaths: self.rulepaths[rule.strpremise] = []
+        self.rulepaths[rule.strpremise].append(rule)
+
     def process(self, relations):
-        # relations is a dict of relation -> list of (ent1, ent2) pairs
-        # where relation is an int in the index of keys of short cuts or "?" for any custom relation, 
-        # and ent1 and ent2 are integers that are indices of entities in the index
-        entpairs = np.empty((0,2), dtype=int)
-        relpaths = np.empty((0,6), dtype=int)
-        entpaths = np.empty((0,7), dtype=int)
-        # create the base structure... 
-        for irel in relations:
-            for ents in relations[rel]:
-                entpairs =  np.vstack([entpairs, [ents[0], ents[1]]])
-                relpaths = np.vstack([relpaths, [irel, -1, -1, -1, -1, -1]]) 
-                entpaths = np.vstack([entpaths, [ents[0], ents[1], -1, -1, -1, -1, -1]]) 
-                entpairs, relpaths, entpaths = self.completeFromRel(len(entpairs)-1, entpairs, relpaths, entpaths)        
-        i = 0
-        while i < len(entpairs): # this might grow as we add new entpairs
-            entpairs, relpaths, entpaths = self.applyRules(i, entpairs, relpaths, entpaths)
-            i+=1 
+        pathindex = {}
+        e1index = {}
+        e2index = {}
+        count = 0
+        for rel in relations:
+            for entpair in relations[rel]:
+                self._add_to_relpaths(rel, entpair, pathindex, e1index, e2index)
+                count += 1
+                if count % 1000 == 0: print(".", end="", flush=True)
+        if count >= 1000: print()
         result = {}
-        for i,relpath in enumerate(relpaths):
-            if relpath[1] != -1: continue # only return direct relations
-            rel = int(relpath[0])
+        for path in pathindex:
+            rel = path[1:]
+            if "_" in rel: continue # only return direct relations
+            rel = int(rel)
             if rel not in result: result[rel] = []
-            result[rel].append(entpairs[i].tolist())
+            for entities in pathindex[path]:
+                result[rel].append(entities)
         return result
-    
-    def applyRules(self, i, entpairs, relpaths, entpaths):
-        relpath = relpaths[i]
-        for rule in self.rules:  # might there be a more efficient way than checking all rules?
-            if (relpath == rule.premise).all():
-                ent1 = entpaths[i][rule.conclusion[1]]
-                ent2 = entpaths[i][rule.conclusion[2]]
-                newrel = rule.conclusion[0]
-                # check if we already have this relation
-                if not self.known(ent1, newrel, ent2, entpairs, relpaths):
-                    entpairs = np.vstack([entpairs, [ent1, ent2]])
-                    relpaths = np.vstack([relpaths, [int(newrel), -1, -1, -1, -1, -1]])
-                    entpaths = np.vstack([entpaths, [ent1, ent2, -1, -1, -1, -1, -1]])
-                    # print("Added", ent1, newrel, ent2)
-                    entpairs, relpaths, entpaths = self.completeFromRel(len(entpairs)-1, entpairs, relpaths, entpaths) 
-        return entpairs, relpaths, entpaths
-    
-    def known(self, ent1, rel, ent2, entpairs, relpaths): # TODO: make more efficient
-        for i in range(len(entpairs)):
-            if entpairs[i][0] == ent1 and entpairs[i][1] == ent2:
-                if relpaths[i][0] == rel:
-                    return True
-        return False
-    
-    def findPathTo(self, relpath, ent, relpaths, entpairs):
-        if len(relpath) == 0: return []
-        # reduce relpath to values that are not -1
-        # relpath = [r for r in relpath if r != -1] # only relevant for from
-        # print("   Finding path to", ent, "using", relpath)
-        eindex = np.where((entpairs[:,1] == ent) & (relpaths[:,0] == relpath[-1]) & (relpaths[:,1] == -1))[0]
-        # print("      ind to ents:", eindex)
-        nep, nrp = [], []
-        if len(relpath) > 1:
-           for ei in eindex: 
-                nep, nrp = self.findPathTo(relpath[:-1], entpairs[ei][1], relpaths, entpairs)
-        return nrp+[relpath[-1]], nep+[ent]
-    
-    def findPathFrom(self, relpath, ent, relpaths, entpairs):
-        relpath = [r for r in relpath if r != -1]
-        if len(relpath) == 0: return []        
-        #print("   Finding path from", ent, "using", relpath)
-        eindex = np.where((entpairs[:,0] == ent) & (relpaths[:,0] == relpath[0]) & (relpaths[:,1] == -1))[0]
-        # print("      ind to ents:", eindex)
-        nep, nrp = [], []
-        if len(relpath) > 1:
-           for ei in eindex: 
-                nep, nrp = self.findPathFrom(relpath[1:], entpairs[ei][0], relpaths, entpairs)
-        return [relpath[-1]]+nrp, [ent]+nep
-    
-    def completeFromRel(self, i, entpairs, relpaths, entpaths):
-        ent1,rel,ent2 = entpairs[i][0], relpaths[i][0], entpairs[i][1]
-        # print("   Completing from", ent1, rel, ent2)
-        paths = []
-        for rule in self.rules: 
-            if rel in rule.premise: paths.append(rule.premise)
-        for path in paths:
-            if len(path) > 1: 
-                irels = np.where(path == rel)[0]
-                for irel in irels:
-                    prevepaths = self.findPathTo(path[:irel], ent1, relpaths, entpairs) 
-                    nextepaths = self.findPathFrom(path[irel+1:], ent2, relpaths, entpairs)
-            # combine prevepaths and nextepaths with rel in the middle
-            # add paths to entpaths, relpaths, entpairs
-        return entpairs, relpaths, entpaths
+
+    # path as a string : 
+    #    - 1 index path -> (e1, e2)
+    #    - 1 index e1 -> (path->e2)
+    #    - 1 index e2 -> (path->e1)
+    # TODO: deal with possible cycles... if needed
+    def _add_to_relpaths(self, rel, entpair, pathindex, e1index, e2index):
+        npaths = {"_"+str(rel): [entpair]} # initialise npaths with the new relation
+        for usefulpath in self.usefulpaths: 
+           # BUG: will fail if more than 10 rels ("_1" in "_10")
+           if "_"+str(rel) in usefulpath: # TODO: store strrel 
+               # get all indexes of "_"+str(rel) in usefulpath, and for each one, split the path and get the origins and destinations
+               rel_indexes = [i for i in range(len(usefulpath)) if usefulpath.startswith("_"+str(rel), i)]
+               for rel_index in rel_indexes:
+                    prevpath = usefulpath[:rel_index]
+                    nextpath = usefulpath[rel_index+len("_"+str(rel)):]
+                    if prevpath is None or prevpath == "": origins = [entpair[0]]
+                    elif entpair[0] not in e2index or prevpath not in e2index[entpair[0]]: continue
+                    else: origins = e2index[entpair[0]][prevpath]
+                    if nextpath is None or nextpath == "": destinations = [entpair[1]]
+                    elif entpair[1] not in e1index or nextpath not in e1index[entpair[1]]: continue
+                    else: destinations = e1index[entpair[1]][nextpath]
+                    for origin in origins:
+                        for destination in destinations:
+                            if usefulpath not in npaths: npaths[usefulpath] = []
+                            if (origin, destination) not in npaths[usefulpath]: npaths[usefulpath].append((origin, destination))  
+        for path, entities in npaths.items():
+            if path not in pathindex: pathindex[path] = []
+            pathindex[path].extend(entities)
+            for entity in entities:
+                if entity[0] not in e1index: e1index[entity[0]] = {}
+                if path not in e1index[entity[0]]: e1index[entity[0]][path] = []
+                if entity[1] not in e1index[entity[0]][path]: e1index[entity[0]][path].append(entity[1])
+                if entity[1] not in e2index: e2index[entity[1]] = {}
+                if path not in e2index[entity[1]]: e2index[entity[1]][path] = []
+                if entity[0] not in e2index[entity[1]][path]: e2index[entity[1]][path].append(entity[0])
+        for path, entities in npaths.items():
+            if path in self.rulepaths:
+                for entpair in entities:
+                    for rule in self.rulepaths[path]:
+                        nentpair = (entpair[0], entpair[1]) if rule.conclusion[1] == 0 else (entpair[1], entpair[0])
+                        if not self.known(rule.conclusion[0], nentpair, e1index): 
+                            self._add_to_relpaths(rule.conclusion[0], nentpair, pathindex, e1index, e2index)
+
+    def known(self, rel, entpair, e1index):
+        return entpair[0] in e1index and "_"+str(rel) in e1index[entpair[0]] and entpair[1] in e1index[entpair[0]]["_"+str(rel)]
+
+def rdf_to_relations(rdf_file, oshortcuts):
+    import rdflib
+    relations = {}
+    ents = {}
+    shortcuts = {v:k for k,v in oshortcuts.items()}
+    ishortcuts = {sc:i for i,sc in enumerate(oshortcuts.keys())}
+    g = rdflib.Graph()
+    g.parse(rdf_file)
+    for s, p, o in g:
+        if isinstance(s, rdflib.term.URIRef) and isinstance(p, rdflib.term.URIRef) and isinstance(o, rdflib.term.URIRef):
+            s,p,o = str(s), str(p), str(o)
+            if p in shortcuts:
+                irel = ishortcuts[shortcuts[p]]
+                if irel not in relations: relations[irel] = []
+                if s not in ents: ents[s] = len(ents)
+                if o not in ents: ents[o] = len(ents)
+                relations[irel].append((ents[s], ents[o]))
+    g.close()
+    return relations, ents
+
+def relations_to_rdf(relations, ents, shortcuts, output_file):
+    import rdflib
+    g = rdflib.Graph()
+    rev_ents = {v: k for k, v in ents.items()}
+    for rel in relations:
+        shortcut = list(shortcuts.keys())[rel]
+        p = shortcuts[shortcut]
+        for entpair in relations[rel]:
+            s = rev_ents[entpair[0]]
+            o = rev_ents[entpair[1]]
+            g.add((rdflib.URIRef(s), rdflib.URIRef(p), rdflib.URIRef(o)))
+    g.serialize(destination=output_file, format='nt', encoding='utf-8')
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) != 3:
-        print("Usage: python krules.py <rule_file> <rdf_file>")
+    import time
+    if len(sys.argv) != 4:
+        print("Usage: python krules.py <rule_file> <rdf_file> <output_file>")
         sys.exit(1)
     rule_file = sys.argv[1]
     rdf_file = sys.argv[2]
+    output_file = sys.argv[3]
     rb = KRuleBase(rule_file)
-    # rels, enti = rdf_to_relations(rdf_file, rb.shortcuts)
-    # irels = rb.process(rels)
-    # print(irels)
+    print("Loaded", len(rb.shortcuts), "shortcuts and", len(rb.rules), "rules.")
+    rels, enti = rdf_to_relations(rdf_file, rb.shortcuts)
+    print("Loaded", len(rels), "relations and", len(enti), "entities from RDF file.")
+    count = 0
+    print(f"{sum(len(rels[rel]) for rel in rels)} triples included")
+    time1 = time.time()
+    irels = rb.process(rels)
+    ttime = time.time() - time1
+    print("Obtained", sum(len(irels[rel]) for rel in irels), "triples after inference in", ttime, "seconds.")
+    relations_to_rdf(irels, enti, rb.shortcuts, output_file)
+    print("Saved to", output_file)
