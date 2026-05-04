@@ -4,8 +4,9 @@ A set of simple rule engines for learning purposes and use in python:
 
 - **`simple_propositional.py`** — propositional rules, i.e. rules that have propositional variables (true/false) as premises and conclusions.
 - **`first_order.py`** — first-order rules with predicate arguments and unification (variables start with an uppercase letter, facts must be ground)
+- **`simple_graph.py`** — graph-based forward chaining over binary relations (triples), designed for RDF/RDFS/OWL-style inference at scale.
 
-Both provide the same three inference algorithms:
+`simple_propositional` and `first_order` provide the same three inference algorithms:
 
 | Algorithm | Description |
 |---|---|
@@ -132,3 +133,48 @@ The animal is a penguin!
 | `examples/fo_ex2.py` | Iris classification, first-order (rules loaded from `iris.pl`) |
 | `examples/fo_ex3.py` | Family/dog relationships, first-order |
 | `examples/fo_ex4.py` | Animal identification using interactive backward chaining |
+
+---
+
+## Graph-based rules (`simple_graph.py`)
+
+`simple_graph.py` targets a different problem: large-scale inference over binary relations (subject–predicate–object triples), as found in RDF graphs. Rather than Horn clauses over arbitrary predicates, rules here describe **paths of relations** and derive a new relation between the endpoints of the path.
+
+### Rule format
+
+Rules are written in a `.krules` file. Shortcuts map short names to full URIs (or any string). Rules use a Datalog-like syntax where the premise is a chain of relations:
+
+```
+# shortcuts
+sco :: http://www.w3.org/2000/01/rdf-schema#subClassOf
+type :: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+
+# transitivity of subClassOf
+a sco c :- a sco b, b sco c
+
+# type propagation along subClassOf
+a type c :- a type b, b sco c
+```
+
+The premise must form a path (the object of one triple is the subject of the next). The conclusion must relate the first subject to the last object (or vice versa).
+
+### Usage
+
+```python
+from simple_graph import KRuleBase, rdf_to_relations, relations_to_rdf
+
+rb = KRuleBase("examples/rdfs_owl_base.krules")
+rels, ents = rdf_to_relations("examples/theremin.ttl", rb.shortcuts)
+inferred = rb.process(rels)
+relations_to_rdf(inferred, ents, rb.shortcuts, "output.nt")
+```
+
+`rdf_to_relations` and `relations_to_rdf` handle conversion between RDF files and the internal integer-indexed representation. The engine can also be used directly without RDF by passing a dict of `{relation_index: [(subject_index, object_index), ...]}`.
+
+### Rule files
+
+| File | Description |
+|---|---|
+| `examples/rdfs_owl_base.krules` | Basic RDFS/OWL rules: transitivity of `subClassOf`/`subPropertyOf`, type propagation, equivalence and inverse handling |
+| `examples/theremin.ttl` | Small ontology about the Theremin instrument |
+| `examples/students_v1_withindis.ttl` | Student/lecturer ontology with class hierarchies and equivalences |
